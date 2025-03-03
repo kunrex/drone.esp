@@ -15,7 +15,7 @@ constexpr unsigned int max_pwm = 255;
 
 constexpr unsigned int thrust_threshold = 20;
 
-constexpr float de = 1e-6;
+constexpr float epsilon = 1e-6;
 
 typedef void (*Delegate)(const float(&)[4]);
 
@@ -42,25 +42,19 @@ class DroneCallBack : public BLECharacteristicCallbacks
 
 struct PIDWrapper 
 {
-    private:
+    public:
         const float kp;
         const float ki;
         const float kd;
 
-    public:
-        PIDWrapper(float kp, float ki, float kd) : kp(kp), ki(ki), kd(kd) { }
-
-        float calculate(const float error, const float de, const float dt) const
-        { 
-            return kp * error + ki * error * dt + kd * de / (dt + de); 
-        }
+        PIDWrapper(const float kp, const float ki, const float kd) : kp(kp), ki(ki), kd(kd) { }
 };
 
 class Axis 
 {
     private:
         float error;
-        PIDWrapper wrapper;
+        const PIDWrapper wrapper;
   
     public:
         Axis(float kp, float ki, float kd) : error(0), wrapper(kp, ki, kd) { }
@@ -68,7 +62,7 @@ class Axis
         float calculate(const float input, const float sensor, const float dt) 
         {
             const auto e = input - sensor;
-            return error = wrapper.calculate(e, e - error, dt);
+            return error = wrapper.kp * error + wrapper.ki * error * dt + wrapper.kd * e / (dt + epsilon);
         }
 };
 
@@ -157,13 +151,13 @@ void sensorIn(const float dt)
     Wire.endTransmission(false);
     Wire.requestFrom(MPU, 6, true); // reads 6 registers, 2 each which correspond to accelerometer data along one axis. 
     
-    //for a range of +-2g, we need to divide the raw values by 16384 (according to the datasheet)
+    //for a range of +-2g, we need to divide the raw values by 4096 (according to the datasheet)
     const auto accX = (Wire.read() << 8 | Wire.read()) / 4096.0;
     const auto accY = (Wire.read() << 8 | Wire.read()) / 4096.0;
     const auto accZ = (Wire.read() << 8 | Wire.read()) / 4096.0; 
 
-    const auto accAngleX = (atan((accY / sqrt(pow(accX, 2) + pow(accZ, 2) + de))) * 180 / PI) - 0.58; // error in accX is aprox 0.58 
-    const auto accAngleY = (atan(-1 * (accX / sqrt(pow(accY, 2) + pow(accZ, 2) + de))) * 180 / PI) + 1.58; // err in accY is aprox -1.58
+    const auto accAngleX = (atan((accY / sqrt(pow(accX, 2) + pow(accZ, 2) + epsilon))) * 180 / PI) - 0.58; // error in accX is aprox 0.58 
+    const auto accAngleY = (atan(-1 * (accX / sqrt(pow(accY, 2) + pow(accZ, 2) + epsilon))) * 180 / PI) + 1.58; // err in accY is aprox -1.58
 
     Wire.beginTransmission(MPU);
     Wire.write(0x43); // connects to the gyroscope out (43 hex)
