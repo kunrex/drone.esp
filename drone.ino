@@ -151,7 +151,7 @@ void sensorIn(const float dt)
     Wire.endTransmission(false);
     Wire.requestFrom(MPU, 6, true); // reads 6 registers, 2 each which correspond to accelerometer data along one axis. 
     
-    //for a range of +-2g, we need to divide the raw values by 4096 (according to the datasheet)
+    //for a range of +-8g, we need to divide the raw values by 4096 (according to the datasheet)
     const auto accX = (Wire.read() << 8 | Wire.read()) / 4096.0;
     const auto accY = (Wire.read() << 8 | Wire.read()) / 4096.0;
     const auto accZ = (Wire.read() << 8 | Wire.read()) / 4096.0; 
