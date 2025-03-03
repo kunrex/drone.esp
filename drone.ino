@@ -5,8 +5,8 @@
 
 constexpr const char* device_name = "david.drone";
 
-constexpr std::string_view service_id = "12345678-1234-5678-1234-56789abcdef0";
-constexpr std::string_view input_characteristic_id = "abcdef01-1234-5678-1234-56789abcdef0";
+constexpr const char* service_id = "12345678-1234-5678-1234-56789abcdef0";
+constexpr const char* input_characteristic_id = "abcdef01-1234-5678-1234-56789abcdef0";
 
 constexpr int MPU = 0x68;
 
@@ -53,16 +53,21 @@ struct PIDWrapper
 class Axis 
 {
     private:
-        float error;
+        float integral;
+        float previousError;
+
         const PIDWrapper wrapper;
   
     public:
-        Axis(float kp, float ki, float kd) : error(0), wrapper(kp, ki, kd) { }
+        Axis(float kp, float ki, float kd) : integral(0), previousError(0), wrapper(kp, ki, kd) { }
 
         float calculate(const float input, const float sensor, const float dt) 
         {
-            const auto e = input - sensor;
-            return error = wrapper.kp * error + wrapper.ki * error * dt + wrapper.kd * e / (dt + epsilon);
+            const auto error = input - sensor;
+            const auto out = wrapper.kp * error + wrapper.ki * (integral += error * dt) + wrapper.kd * (error - previousError) / dt;
+
+            previousError = error;
+            return out;
         }
 };
 
@@ -104,14 +109,14 @@ void setup()
     BLEDevice::init(device_name);
     
     const auto server = BLEDevice::createServer();
-    const auto service = server->createService(service_id.data());
+    const auto service = server->createService(service_id);
 
-    const auto characteristic = service->createCharacteristic(input_characteristic_id.data(), BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
+    const auto characteristic = service->createCharacteristic(input_characteristic_id, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
     characteristic->setCallbacks(&callBack);
     service->start();
     
     const auto advertising = BLEDevice::getAdvertising();
-    advertising->addServiceUUID(service_id.data());
+    advertising->addServiceUUID(service_id);
     advertising->setScanResponse(true);
     advertising->start();
 
@@ -189,13 +194,13 @@ void loop()
 
     if (inThrust < thrust_threshold) 
     {
+        digitalWrite(stby1, LOW);
+        digitalWrite(stby2, LOW);
+
         motorBrake(front_right);
         motorBrake(front_left);
         motorBrake(back_right);
         motorBrake(back_left);
-
-        digitalWrite(stby1, LOW);
-        digitalWrite(stby2, LOW);
     }
     else 
     {
@@ -209,4 +214,5 @@ void loop()
     }
 
     then = now;
+    delay(5);
 }
